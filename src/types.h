@@ -88,8 +88,8 @@ typedef struct {
     int num_events;
 
     int num_days;          /* 5 */
-    int periods_per_day;   /* 14 (45-min slots) */
-    int total_timeslots;   /* num_days * periods_per_day = 70 */
+    int periods_per_day;   /* 8 (1.5h blocks) */
+    int total_timeslots;   /* num_days * periods_per_day = 40 */
 } ProblemData;
 
 /* ----- Timeslot conversion macros ----- */
@@ -103,7 +103,7 @@ typedef struct {
 /* Gene: assignment of one event to a start timeslot and room.
  * The event occupies timeslot..timeslot+duration_slots-1 in room_id. */
 typedef struct {
-    int timeslot;   /* 0..TOTAL_TIMESLOTS-1 (0..69), start of event */
+    int timeslot;   /* 0..TOTAL_TIMESLOTS-1 (0..39), start of event */
     int room_id;    /* 1..num_rooms (1-indexed, matches Room.id from CSV) */
 } Gene;
 
@@ -117,9 +117,9 @@ typedef struct {
 
 /* GA configuration parameters */
 typedef struct {
-    int population_size;     /* 200 */
-    int max_generations;     /* 5000 */
-    int stagnation_limit;    /* 500 */
+    int population_size;     /* 200 / N islands */
+    int max_generations;     /* 500 */
+    int stagnation_limit;    /* 200 */
     int tournament_size;     /* 3 */
     double crossover_rate;   /* 0.8 */
     double mutation_rate;    /* 0.05 per gene */

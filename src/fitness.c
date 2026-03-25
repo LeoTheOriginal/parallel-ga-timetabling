@@ -213,7 +213,7 @@ int evaluate_soft(const Individual *ind, const ProblemData *data)
             if (period > group_day_max[gid][day])
                 group_day_max[gid][day] = period;
 
-            /* Late class penalty: slots 12-13 (after 18:30) */
+            /* Late class penalty: last 2 periods of day (16:45+) */
             if (period >= PERIODS_PER_DAY - 2)
                 penalty += 1;
         }
