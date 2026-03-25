@@ -18,8 +18,8 @@
 #define MAX_EVENTS      2500
 
 #define NUM_DAYS        5
-#define PERIODS_PER_DAY 8
-#define TOTAL_TIMESLOTS (NUM_DAYS * PERIODS_PER_DAY)  /* 40 */
+#define PERIODS_PER_DAY 7
+#define TOTAL_TIMESLOTS (NUM_DAYS * PERIODS_PER_DAY)  /* 35 */
 
 /* ----- Entity structs ----- */
 
@@ -88,8 +88,8 @@ typedef struct {
     int num_events;
 
     int num_days;          /* 5 */
-    int periods_per_day;   /* 8 (1.5h blocks) */
-    int total_timeslots;   /* num_days * periods_per_day = 40 */
+    int periods_per_day;   /* 7 (1.5h blocks: 8:00-20:00) */
+    int total_timeslots;   /* num_days * periods_per_day = 35 */
 } ProblemData;
 
 /* ----- Timeslot conversion macros ----- */
@@ -103,7 +103,7 @@ typedef struct {
 /* Gene: assignment of one event to a start timeslot and room.
  * The event occupies timeslot..timeslot+duration_slots-1 in room_id. */
 typedef struct {
-    int timeslot;   /* 0..TOTAL_TIMESLOTS-1 (0..39), start of event */
+    int timeslot;   /* 0..TOTAL_TIMESLOTS-1 (0..34), start of event */
     int room_id;    /* 1..num_rooms (1-indexed, matches Room.id from CSV) */
 } Gene;
 

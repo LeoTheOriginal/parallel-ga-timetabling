@@ -434,11 +434,10 @@ void write_timetable(const char *filename, const Individual *best,
 
     /* Day names for column headers */
     const char *day_names[] = {"Mon", "Tue", "Wed", "Thu", "Fri"};
-    /* Slot time labels for 45-min granularity */
+    /* Block labels: 7 x 1.5h blocks matching converter BLOCKS */
     const char *slot_labels[] = {
-        " 8:00", " 8:45", " 9:45", "10:30", "11:30", "12:15",
-        "13:15", "14:00", "15:00", "15:45", "16:45", "17:30",
-        "18:30", "19:15"
+        " 8:00", " 9:45", "11:30", "13:15",
+        "15:00", "16:45", "18:30"
     };
 
     /* For each student group, build and print a grid */
