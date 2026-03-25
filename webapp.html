@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AGH WFiIS — Plan Zajęć: Porównanie</title>
+<!--
+  GA-UniTime: Side-by-side schedule comparison.
+  LEFT = Original UniTime schedule, RIGHT = GA-optimized.
+  Reads data from local API (scripts/api_prototype.py --port 8080).
+  All DOM content is built programmatically from trusted self-generated data.
+-->
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #181b24;
+  --surface2: #1e222d;
+  --border: #2a2f3d;
+  --text: #e2e4ea;
+  --text2: #8b90a0;
+  --accent: #4fc3f7;
+  --accent2: #ff8a65;
+  --cwl: #42a5f5; --cwl-bg: rgba(66,165,245,.15);
+  --wyk: #ffa726; --wyk-bg: rgba(255,167,38,.12);
+  --cwa: #66bb6a; --cwa-bg: rgba(102,187,106,.12);
+  --proj: #ab47bc; --proj-bg: rgba(171,71,188,.12);
+  --sem: #ef5350; --sem-bg: rgba(239,83,80,.12);
+  --free: rgba(76,175,80,.08);
+  --grid-line: rgba(255,255,255,.04);
+  --radius: 6px;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'DM Sans', sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height: 100%; }
+body { font-family: var(--font-sans); background: var(--bg); color: var(--text); display: flex; flex-direction: column; }
+
+.header {
+  background: linear-gradient(135deg, #1a237e 0%, #0d1b2a 100%);
+  padding: 14px 24px; display: flex; align-items: center; gap: 14px;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.header .logo {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--accent); display: grid; place-items: center;
+  font: 700 16px var(--font-mono); color: var(--bg);
+}
+.header h1 { font: 600 16px var(--font-sans); }
+.header .sub { font: 400 11px var(--font-mono); color: var(--text2); margin-top: 2px; }
+
+.tabs {
+  display: flex; background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 0 16px; flex-shrink: 0;
+}
+.tab {
+  padding: 10px 18px; font: 500 13px var(--font-sans); color: var(--text2);
+  cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s; user-select: none;
+}
+.tab:hover { color: var(--text); background: rgba(255,255,255,.03); }
+.tab.active { color: var(--accent); border-color: var(--accent); }
+
+.legend {
+  display: flex; gap: 14px; padding: 8px 20px; font: 400 11px var(--font-sans);
+  color: var(--text2); flex-wrap: wrap; background: var(--surface);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.legend span { display: flex; align-items: center; gap: 4px; }
+.legend .dot { width: 9px; height: 9px; border-radius: 3px; }
+
+/* Split layout */
+.split { display: flex; flex: 1; overflow: hidden; }
+.panel { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.panel + .panel { border-left: 2px solid rgba(79,195,247,.25); }
+
+.panel-hdr {
+  padding: 8px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--surface2); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.panel-hdr .tag {
+  padding: 3px 10px; border-radius: 10px; font: 700 11px var(--font-mono);
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.panel-hdr .tag.orig { background: rgba(79,195,247,.12); color: var(--accent); border: 1px solid rgba(79,195,247,.25); }
+.panel-hdr .tag.ga { background: rgba(255,138,101,.12); color: var(--accent2); border: 1px solid rgba(255,138,101,.25); }
+.panel-hdr select {
+  padding: 5px 8px; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  font: 400 11px var(--font-mono); cursor: pointer;
+}
+.panel-hdr select:focus { border-color: var(--accent); outline: none; }
+.panel-hdr .lbl { font: 600 10px var(--font-mono); color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+
+.panel-ctrl {
+  padding: 8px 14px; display: flex; gap: 10px; align-items: center;
+  background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.panel-ctrl select {
+  padding: 6px 10px; background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  font: 400 12px var(--font-sans); flex: 1; min-width: 0; cursor: pointer;
+}
+.panel-ctrl select:focus { border-color: var(--accent); outline: none; }
+.panel-ctrl .badge {
+  padding: 3px 8px; border-radius: 10px; font: 500 10px var(--font-mono);
+  background: rgba(66,165,245,.12); color: var(--cwl); border: 1px solid rgba(66,165,245,.15);
+  white-space: nowrap; flex-shrink: 0;
+}
+
+.grid-wrap { flex: 1; overflow: auto; padding: 8px; }
+.tgrid {
+  display: grid; grid-template-columns: 42px repeat(5, 1fr);
+  border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; background: var(--surface); min-width: 340px;
+}
+.tgrid .hdr {
+  background: linear-gradient(180deg, #1a237e, #0d1442); padding: 8px 4px;
+  text-align: center; font: 700 12px var(--font-sans); color: rgba(255,255,255,.9);
+  border-bottom: 2px solid var(--accent);
+}
+.tgrid .corner { background: var(--surface2); border-bottom: 2px solid var(--border); }
+.tgrid .time {
+  padding: 3px 4px; text-align: right; font: 400 9px var(--font-mono);
+  color: var(--text2); background: var(--surface2);
+  border-bottom: 1px solid var(--grid-line); border-right: 1px solid var(--border);
+  display: flex; align-items: flex-start; justify-content: flex-end;
+}
+.tgrid .cell {
+  border-bottom: 1px solid var(--grid-line); border-right: 1px solid var(--grid-line);
+  min-height: 52px; padding: 2px; display: flex; gap: 1px; align-items: stretch;
+}
+.tgrid .cell.free-day { background: var(--free); }
+
+.ev {
+  border-radius: 3px; padding: 2px 4px; font: 400 8px var(--font-mono);
+  overflow: hidden; cursor: pointer; z-index: 1; border-left: 3px solid;
+  transition: transform .15s, box-shadow .15s; flex: 1; min-width: 0;
+}
+.ev:hover { transform: scale(1.05); box-shadow: 0 4px 16px rgba(0,0,0,.5); z-index: 10; }
+.ev .nm { font-weight: 600; font-size: 8px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev .rm { font-size: 7px; opacity: .7; margin-top: 1px; }
+.ev.cwl { background: var(--cwl-bg); border-color: var(--cwl); color: var(--cwl); }
+.ev.wyk { background: var(--wyk-bg); border-color: var(--wyk); color: var(--wyk); }
+.ev.cwa { background: var(--cwa-bg); border-color: var(--cwa); color: var(--cwa); }
+.ev.proj { background: var(--proj-bg); border-color: var(--proj); color: var(--proj); }
+.ev.sem { background: var(--sem-bg); border-color: var(--sem); color: var(--sem); }
+
+.tp {
+  position: fixed; background: rgba(15,17,23,.96); border: 1px solid var(--border);
+  color: var(--text); padding: 10px 14px; border-radius: 6px;
+  font: 400 11px var(--font-sans); pointer-events: none; z-index: 1000;
+  display: none; max-width: 320px; line-height: 1.5; box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  white-space: pre-line;
+}
+
+.no-data {
+  grid-column: 1 / -1; padding: 40px; text-align: center;
+  color: var(--text2); font: 14px var(--font-sans);
+}
+.no-data .hint {
+  display: block; margin-top: 8px;
+  font: 11px var(--font-mono); color: var(--accent);
+  background: var(--surface2); padding: 4px 10px; border-radius: 4px;
+  display: inline-block;
+}
+
+.stats-wrap { flex: 1; overflow: auto; padding: 16px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+.stat-card:hover { border-color: var(--accent); }
+.stat-card .val { font: 700 28px var(--font-mono); color: var(--accent); }
+.stat-card .lbl { font: 400 11px var(--font-sans); color: var(--text2); margin-top: 3px; }
+
+.err-banner {
+  padding: 14px 20px; background: #1a1a2e; color: #ef5350;
+  font: 13px var(--font-mono); border-bottom: 2px solid #ef5350; flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">GA</div>
+  <div><h1>AGH WFiIS — Plan Zajęć</h1><div class="sub">Side-by-side: Oryginalny UniTime vs GA Island Model (MPI)</div></div>
+</div>
+<div class="tabs" id="tabs">
+  <div class="tab active" data-v="room">Sale</div>
+  <div class="tab" data-v="program">Kierunki</div>
+  <div class="tab" data-v="student">Studenci</div>
+  <div class="tab" data-v="teacher">Prowadzący</div>
+  <div class="tab" data-v="stats">Statystyki</div>
+</div>
+<div class="legend">
+  <span><span class="dot" style="background:var(--cwl)"></span> CWL</span>
+  <span><span class="dot" style="background:var(--wyk)"></span> Wykład</span>
+  <span><span class="dot" style="background:var(--cwa)"></span> CWA</span>
+  <span><span class="dot" style="background:var(--proj)"></span> Projekt</span>
+  <span><span class="dot" style="background:var(--sem)"></span> Seminarium</span>
+</div>
+
+<div class="split" id="main-split">
+  <!-- LEFT: Original -->
+  <div class="panel" id="panel-left">
+    <div class="panel-hdr">
+      <span class="tag orig">Oryginał</span>
+      <span class="lbl">UniTime</span>
+      <span style="margin-left:auto;font:400 10px var(--font-mono);color:var(--text2)" id="left-info"></span>
+    </div>
+    <div class="panel-ctrl" id="left-ctrl">
+      <select id="left-entity"></select>
+      <span class="badge" id="left-badge"></span>
+    </div>
+    <div class="grid-wrap" id="left-grid-wrap"><div class="tgrid" id="grid-left"></div></div>
+    <div class="stats-wrap" id="left-stats-wrap" style="display:none"><div class="stats-grid" id="stats-left"></div></div>
+  </div>
+  <!-- RIGHT: GA -->
+  <div class="panel" id="panel-right">
+    <div class="panel-hdr">
+      <span class="tag ga">GA</span>
+      <span class="lbl">Zdarzenia:</span>
+      <select id="ds-select"></select>
+      <span class="lbl">Procesy:</span>
+      <select id="procs-select"></select>
+      <span style="margin-left:auto;font:400 10px var(--font-mono);color:var(--text2)" id="right-info"></span>
+    </div>
+    <div class="panel-ctrl" id="right-ctrl">
+      <select id="right-entity"></select>
+      <span class="badge" id="right-badge"></span>
+    </div>
+    <div class="grid-wrap" id="right-grid-wrap"><div class="tgrid" id="grid-right"></div></div>
+    <div class="stats-wrap" id="right-stats-wrap" style="display:none"><div class="stats-grid" id="stats-right"></div></div>
+  </div>
+</div>
+
+<div class="tp" id="tp"></div>
+
+<script>
+/* ========== Constants ========== */
+var DN = ['Pn','Wt','\u015ar','Cz','Pt'];
+var SL = ['8:00','9:45','11:30','13:15','15:00','16:45','18:30','20:00'];
+var SL_END = ['9:30','11:15','13:00','14:45','16:30','18:15','20:00','21:30'];
+
+/* ========== State ========== */
+var allDatasets = [];
+var currentTab = 'room';
+
+var L = { rooms:{}, teachers:{}, groups:{}, schedule:[], ds:'simple' };
+var R = { rooms:{}, teachers:{}, groups:{}, schedule:[], ds:'simple', procs:16 };
+
+/* ========== Helpers ========== */
+function etyp(n) {
+  if (!n) return 'sem';
+  var s = n.toLowerCase();
+  if (s.indexOf('cwl') >= 0) return 'cwl';
+  if (s.indexOf('wyk') >= 0) return 'wyk';
+  if (s.indexOf('cwa') >= 0) return 'cwa';
+  if (s.indexOf('proj') >= 0 || s.indexOf('wicz') >= 0) return 'proj';
+  return 'sem';
+}
+
+function fillSelect(id, items, fmt) {
+  var sel = document.getElementById(id);
+  sel.textContent = '';
+  items.forEach(function(item) {
+    var o = document.createElement('option');
+    o.value = item.id !== undefined ? item.id : (item.value || item.name);
+    o.textContent = fmt(item);
+    sel.appendChild(o);
+  });
+}
+
+function syncEntityByName(sourceId, targetId) {
+  var src = document.getElementById(sourceId);
+  if (!src || !src.selectedOptions.length) return;
+  var txt = src.selectedOptions[0].textContent;
+  var name = txt.split('(')[0].trim();
+  var tgt = document.getElementById(targetId);
+  for (var i = 0; i < tgt.options.length; i++) {
+    if (tgt.options[i].textContent.indexOf(name) >= 0) {
+      tgt.value = tgt.options[i].value;
+      return;
+    }
+  }
+}
+
+/* ========== Grid rendering ========== */
+function renderGrid(gridId, evts, ctx, badgeId) {
+  var g = document.getElementById(gridId);
+  g.textContent = '';
+
+  var corner = document.createElement('div');
+  corner.className = 'corner';
+  g.appendChild(corner);
+  DN.forEach(function(d) {
+    var h = document.createElement('div');
+    h.className = 'hdr';
+    h.textContent = d;
+    g.appendChild(h);
+  });
+
+  var freeDays = null;
+  if (currentTab === 'student') {
+    freeDays = new Set(evts.map(function(e) { return e.day; }));
+  }
+
+  for (var s = 0; s < 8; s++) {
+    var t = document.createElement('div');
+    t.className = 'time';
+    t.textContent = SL[s] + '-' + SL_END[s];
+    g.appendChild(t);
+
+    for (var d = 0; d < 5; d++) {
+      var cell = document.createElement('div');
+      cell.className = 'cell';
+      if (freeDays && !freeDays.has(d)) cell.classList.add('free-day');
+
+      evts.filter(function(e) { return e.day === d && e.period === s; }).forEach(function(e) {
+        var rname = (ctx.rooms[e.room_id] || {}).name || '?';
+        var tname = (ctx.teachers[e.teacher_id] || {}).name || '?';
+        var gname = (ctx.groups[e.group_id] || {}).name || '?';
+        var cname = e.course_name || 'Event';
+        var tp = etyp(cname);
+
+        var ev = document.createElement('div');
+        ev.className = 'ev ' + tp;
+        var nm = document.createElement('div');
+        nm.className = 'nm';
+        nm.textContent = cname.substring(0, 20);
+        ev.appendChild(nm);
+        var rd = document.createElement('div');
+        rd.className = 'rm';
+        rd.textContent = rname;
+        ev.appendChild(rd);
+
+        ev.onmouseenter = (function(cn, rn, tn, gn, per) {
+          return function(evt) {
+            var tip = document.getElementById('tp');
+            tip.textContent = cn + '\n' + rn + ' | ' + tn + '\n' + gn + ' | ' + SL[per];
+            tip.style.display = 'block';
+            tip.style.left = (evt.clientX + 12) + 'px';
+            tip.style.top = (evt.clientY + 12) + 'px';
+          };
+        })(cname, rname, tname, gname, e.period);
+        ev.onmousemove = function(evt) {
+          var tip = document.getElementById('tp');
+          tip.style.left = (evt.clientX + 12) + 'px';
+          tip.style.top = (evt.clientY + 12) + 'px';
+        };
+        ev.onmouseleave = function() { document.getElementById('tp').style.display = 'none'; };
+
+        cell.appendChild(ev);
+      });
+      g.appendChild(cell);
+    }
+  }
+
+  updateBadge(badgeId, evts, ctx);
+}
+
+function updateBadge(badgeId, evts, ctx) {
+  if (!badgeId) return;
+  var badge = document.getElementById(badgeId);
+  if (currentTab === 'room') {
+    var slots = evts.reduce(function(a, e) { return a + e.duration_slots; }, 0);
+    badge.textContent = slots + '/40 (' + Math.round(slots / 40 * 100) + '%)';
+  } else if (currentTab === 'student') {
+    var usedDays = new Set(evts.map(function(e) { return e.day; }));
+    var free = [];
+    for (var i = 0; i < 5; i++) if (!usedDays.has(i)) free.push(DN[i]);
+    badge.textContent = evts.length + ' zaj. wolne: ' + (free.length ? free.join(', ') : 'brak');
+  } else if (currentTab === 'teacher') {
+    var sl2 = evts.reduce(function(a, e) { return a + e.duration_slots; }, 0);
+    badge.textContent = evts.length + ' zaj. ' + Math.round(sl2 * 1.5) + 'h/tydz';
+  } else if (currentTab === 'program') {
+    var grps = {};
+    evts.forEach(function(e) { grps[e.group_id] = true; });
+    badge.textContent = evts.length + ' zaj. ' + Object.keys(grps).length + ' grup';
+  }
+}
+
+/* ========== Stats rendering ========== */
+function renderStats(containerId, ctx) {
+  var el = document.getElementById(containerId);
+  el.textContent = '';
+  var schedule = ctx.schedule;
+
+  var roomOcc = {}, teacherOcc = {}, groupOcc = {};
+  schedule.forEach(function(e) {
+    for (var s = 0; s < e.duration_slots; s++) {
+      var slot = e.period + s;
+      var rk = e.room_id + ',' + e.day + ',' + slot;
+      var tk = e.teacher_id + ',' + e.day + ',' + slot;
+      var gk = e.group_id + ',' + e.day + ',' + slot;
+      roomOcc[rk] = (roomOcc[rk] || 0) + 1;
+      teacherOcc[tk] = (teacherOcc[tk] || 0) + 1;
+      groupOcc[gk] = (groupOcc[gk] || 0) + 1;
+    }
+  });
+  var rc = 0, tc = 0, gc = 0;
+  for (var k in roomOcc) if (roomOcc[k] > 1) rc++;
+  for (var k in teacherOcc) if (teacherOcc[k] > 1) tc++;
+  for (var k in groupOcc) if (groupOcc[k] > 1) gc++;
+
+  var cards = [
+    { v: schedule.length, l: 'Zajec' },
+    { v: Object.keys(ctx.rooms).length, l: 'Sal' },
+    { v: Object.keys(ctx.teachers).length, l: 'Prowadzacych' },
+    { v: Object.keys(ctx.groups).length, l: 'Grup' },
+    { v: rc, l: 'Kolizje sal' },
+    { v: tc, l: 'Kolizje prowadzacych' },
+    { v: gc, l: 'Kolizje grup' },
+  ];
+  cards.forEach(function(c) {
+    var d = document.createElement('div');
+    d.className = 'stat-card';
+    var vd = document.createElement('div');
+    vd.className = 'val';
+    vd.textContent = c.v;
+    d.appendChild(vd);
+    var ld = document.createElement('div');
+    ld.className = 'lbl';
+    ld.textContent = c.l;
+    d.appendChild(ld);
+    el.appendChild(d);
+  });
+}
+
+/* ========== Entity filtering ========== */
+function getFilteredEvents(ctx, entityId) {
+  var id = parseInt(entityId);
+  if (currentTab === 'room') {
+    return ctx.schedule.filter(function(e) { return e.room_id === id; });
+  } else if (currentTab === 'student') {
+    return ctx.schedule.filter(function(e) { return e.group_id === id; });
+  } else if (currentTab === 'teacher') {
+    return ctx.schedule.filter(function(e) { return e.teacher_id === id; });
+  } else if (currentTab === 'program') {
+    var prog = entityId;
+    return ctx.schedule.filter(function(e) {
+      var gname = (ctx.groups[e.group_id] || {}).name || '';
+      return gname.indexOf(prog) >= 0;
+    });
+  }
+  return [];
+}
+
+/* ========== Panel rendering ========== */
+function showNoData(gridId, msg, hint) {
+  var g = document.getElementById(gridId);
+  g.textContent = '';
+  var wrap = document.createElement('div');
+  wrap.className = 'no-data';
+  var msgEl = document.createTextNode(msg);
+  wrap.appendChild(msgEl);
+  if (hint) {
+    wrap.appendChild(document.createElement('br'));
+    var hintEl = document.createElement('span');
+    hintEl.className = 'hint';
+    hintEl.textContent = hint;
+    wrap.appendChild(hintEl);
+  }
+  g.appendChild(wrap);
+}
+
+function renderPanel(side) {
+  var ctx = side === 'left' ? L : R;
+  var gridId = 'grid-' + side;
+  var badgeId = side + '-badge';
+  var entitySel = document.getElementById(side + '-entity');
+
+  if (currentTab === 'stats') {
+    document.getElementById(side + '-grid-wrap').style.display = 'none';
+    document.getElementById(side + '-stats-wrap').style.display = 'block';
+    document.getElementById(side + '-ctrl').style.display = 'none';
+    renderStats('stats-' + side, ctx);
+    return;
+  }
+
+  document.getElementById(side + '-grid-wrap').style.display = 'block';
+  document.getElementById(side + '-stats-wrap').style.display = 'none';
+  document.getElementById(side + '-ctrl').style.display = 'flex';
+
+  if (!ctx.schedule.length) {
+    showNoData(gridId,
+      'Brak danych planu GA dla tej konfiguracji.',
+      'Uruchom GA na klastrze i dodaj plik do results_v3/');
+    document.getElementById(badgeId).textContent = 'brak';
+    return;
+  }
+
+  var entityVal = entitySel.value;
+  var evts = getFilteredEvents(ctx, entityVal);
+  renderGrid(gridId, evts, ctx, badgeId);
+}
+
+function renderBoth() {
+  renderPanel('left');
+  renderPanel('right');
+}
+
+/* ========== Entity dropdown population ========== */
+function populateEntityDropdown(side) {
+  var ctx = side === 'left' ? L : R;
+  var selId = side + '-entity';
+
+  if (currentTab === 'room') {
+    var rooms = Object.values(ctx.rooms).sort(function(a, b) { return a.name.localeCompare(b.name); });
+    fillSelect(selId, rooms, function(r) { return r.name + ' (' + r.capacity + (r.is_lab ? ' LAB' : '') + ')'; });
+  } else if (currentTab === 'student') {
+    var groups = Object.values(ctx.groups).sort(function(a, b) { return a.name.localeCompare(b.name); });
+    fillSelect(selId, groups, function(g) { return g.name; });
+  } else if (currentTab === 'teacher') {
+    var teachers = Object.values(ctx.teachers).sort(function(a, b) { return a.name.localeCompare(b.name); });
+    fillSelect(selId, teachers, function(t) { return t.name; });
+  } else if (currentTab === 'program') {
+    var progs = {};
+    Object.values(ctx.groups).forEach(function(g) {
+      var m = g.name.match(/FiIS[-\s](\S+)/);
+      if (m) {
+        var p = m[1].split(' ')[0];
+        progs[p] = (progs[p] || 0) + 1;
+      }
+    });
+    var sel = document.getElementById(selId);
+    sel.textContent = '';
+    Object.keys(progs).sort().forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p;
+      o.textContent = p + ' (' + progs[p] + ' grup)';
+      sel.appendChild(o);
+    });
+  }
+}
+
+/* ========== Data loading ========== */
+function loadPanelData(side, ds, source, procs) {
+  var ctx = side === 'left' ? L : R;
+  ctx.ds = ds;
+
+  var infoId = side + '-info';
+  var scheduleUrl = '/api/schedule?ds=' + ds + '&source=' + source;
+  if (procs) scheduleUrl += '&procs=' + procs;
+
+  Promise.all([
+    fetch('/api/rooms?ds=' + ds).then(function(r) { return r.json(); }),
+    fetch('/api/teachers?ds=' + ds).then(function(r) { return r.json(); }),
+    fetch('/api/groups?ds=' + ds).then(function(r) { return r.json(); }),
+    fetch(scheduleUrl).then(function(r) { return r.json(); }),
+  ]).then(function(results) {
+    ctx.rooms = {};
+    results[0].forEach(function(r) { ctx.rooms[r.id] = r; });
+    ctx.teachers = {};
+    results[1].forEach(function(t) { ctx.teachers[t.id] = t; });
+    ctx.groups = {};
+    results[2].forEach(function(g) { ctx.groups[g.id] = g; });
+    ctx.schedule = results[3];
+
+    document.getElementById(infoId).textContent =
+      ctx.schedule.length + ' zaj. | ' + Object.keys(ctx.rooms).length + ' sal';
+
+    populateEntityDropdown(side);
+
+    if (side === 'right') {
+      syncEntityByName('left-entity', 'right-entity');
+    }
+
+    renderPanel(side);
+  }).catch(function(err) {
+    document.getElementById(infoId).textContent = 'Blad: ' + err.message;
+  });
+}
+
+/* ========== Event handlers ========== */
+
+/* Tabs */
+document.querySelectorAll('.tab').forEach(function(tab) {
+  tab.onclick = function() {
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    tab.classList.add('active');
+    currentTab = tab.getAttribute('data-v');
+    populateEntityDropdown('left');
+    populateEntityDropdown('right');
+    syncEntityByName('left-entity', 'right-entity');
+    renderBoth();
+  };
+});
+
+/* Entity selectors */
+document.getElementById('left-entity').onchange = function() {
+  syncEntityByName('left-entity', 'right-entity');
+  renderBoth();
+};
+document.getElementById('right-entity').onchange = function() {
+  renderPanel('right');
+};
+
+/* Dataset selector */
+document.getElementById('ds-select').onchange = function() {
+  var ds = this.value;
+  var dsInfo = allDatasets.find(function(d) { return d.name === ds; });
+  var procsSel = document.getElementById('procs-select');
+  procsSel.textContent = '';
+  if (dsInfo && dsInfo.ga_procs.length) {
+    dsInfo.ga_procs.forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p;
+      o.textContent = p;
+      procsSel.appendChild(o);
+    });
+  } else {
+    var o = document.createElement('option');
+    o.value = '0';
+    o.textContent = 'brak';
+    procsSel.appendChild(o);
+  }
+  R.procs = parseInt(procsSel.value);
+  R.ds = ds;
+  loadPanelData('right', ds, 'ga', R.procs);
+};
+
+/* Procs selector */
+document.getElementById('procs-select').onchange = function() {
+  R.procs = parseInt(this.value);
+  loadPanelData('right', R.ds, 'ga', R.procs);
+};
+
+/* ========== Init ========== */
+fetch('/api/datasets').then(function(r) { return r.json(); }).then(function(ds) {
+  allDatasets = ds;
+
+  /* Populate dataset dropdown */
+  var dsSel = document.getElementById('ds-select');
+  dsSel.textContent = '';
+  ds.sort(function(a, b) { return a.events - b.events; }).forEach(function(d) {
+    var o = document.createElement('option');
+    o.value = d.name;
+    o.textContent = d.events + ' zdarzen (' + d.name + ')';
+    dsSel.appendChild(o);
+  });
+
+  /* Default to dataset with GA schedules */
+  var withGA = ds.filter(function(d) { return d.ga_procs.length > 0; });
+  var defaultDS = withGA.length ? withGA[withGA.length - 1] : ds[ds.length - 1];
+  dsSel.value = defaultDS.name;
+
+  /* Populate procs dropdown */
+  var procsSel = document.getElementById('procs-select');
+  procsSel.textContent = '';
+  if (defaultDS.ga_procs.length) {
+    defaultDS.ga_procs.forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p;
+      o.textContent = p;
+      procsSel.appendChild(o);
+    });
+  } else {
+    var o = document.createElement('option');
+    o.value = '0';
+    o.textContent = 'brak';
+    procsSel.appendChild(o);
+  }
+
+  /* Load both panels */
+  loadPanelData('left', 'simple', 'original', null);
+  R.ds = defaultDS.name;
+  R.procs = defaultDS.ga_procs.length ? defaultDS.ga_procs[defaultDS.ga_procs.length - 1] : 0;
+  loadPanelData('right', R.ds, 'ga', R.procs);
+
+}).catch(function(err) {
+  var b = document.createElement('div');
+  b.className = 'err-banner';
+  b.textContent = 'API niedostepne. Uruchom: cd project && python3 scripts/api_prototype.py --port 8080';
+  document.body.insertBefore(b, document.body.firstChild);
+});
+</script>
+</body>
+</html>

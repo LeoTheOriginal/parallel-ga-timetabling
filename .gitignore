@@ -1,0 +1,30 @@
+# Build artifacts
+obj/
+*.o
+*.d
+timetable_ga
+
+# Input data (contains real university personnel data)
+data/simple/
+data/simple_n*/
+data/unitime/
+data/*.csv
+
+# Runtime outputs
+timetable.txt
+schedule.csv
+convergence_rank*.csv
+results/
+results_v3/
+
+# Database
+*.db
+
+# Cluster files
+nodes
+
+# OS/editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
