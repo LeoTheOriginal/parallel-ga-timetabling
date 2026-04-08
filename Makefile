@@ -1,13 +1,14 @@
 # Parallel GA -- University Timetabling
 # ======================================
 #
-# IMPORTANT: Before compiling, source the MPICH environment:
-#   On taurus:  source /opt/nfs/config/source_mpich32.sh && export MPIR_CVAR_ENABLE_GPU=0
-#   On cluster: source /opt/nfs/config/source_mpich500.sh && source /opt/nfs/config/source_cuda121.sh && export MPIR_CVAR_ENABLE_GPU=0
+# Before compiling, source the MPICH environment:
+#   source /opt/nfs/config/source_mpich500.sh
+#   source /opt/nfs/config/source_cuda121.sh
+#   export MPIR_CVAR_ENABLE_GPU=0
 
 CC       = mpicc
 CFLAGS   = -std=c99 -Wall -Wextra -Wpedantic -O2
-LDFLAGS  = -lm
+LDFLAGS  = -lm -Wl,--allow-shlib-undefined
 
 SRC_DIR  = src
 OBJ_DIR  = obj
@@ -81,30 +82,27 @@ demo-cluster:
 convert:
 	python3 scripts/convert_simple.py data/unitime/events_raw.csv data/simple/ --no-grupa --stats
 
-# Clean build artifacts
+# Restore directory to initial state (build artifacts + generated outputs)
 clean:
-	rm -rf $(OBJ_DIR) $(TARGET)
+	rm -rf $(OBJ_DIR) $(TARGET) timetable.txt schedule.csv convergence_rank*.csv nodes
 
 # Build PDF report (requires pdflatex)
 report:
 	$(MAKE) -C ../report
 
-# Create submission archive
-archive: report
-	cd .. && tar czf piotrowski_projekt26.tar.gz \
-		--exclude='*.o' \
-		--exclude='obj' \
-		--exclude='.git' \
-		--exclude='.planning' \
-		--exclude='.obsidian' \
-		--exclude='.claude' \
-		--exclude='temp' \
-		--exclude='*.md' \
-		--exclude='project/results' \
-		--exclude='project/timetable.txt' \
-		--exclude='project/convergence_rank*.csv' \
-		project/ \
-		report/raport.pdf
-	@echo "Archive created: ../piotrowski_projekt26.tar.gz"
+# Create submission archive: 26-2-piotrowski-przezdzik.tar.gz
+ARCHIVE = 26-2-piotrowski-przezdzik
+archive: clean
+	@mkdir -p $(ARCHIVE)
+	@cp -r src/ $(ARCHIVE)/src/
+	@cp -r data/simple/ $(ARCHIVE)/data/
+	@cp -r results_v3/ $(ARCHIVE)/results/
+	@cp Makefile $(ARCHIVE)/
+	@cp README.txt $(ARCHIVE)/
+	@if [ -f raport.pdf ]; then cp raport.pdf $(ARCHIVE)/; else echo "WARNING: raport.pdf not found — copy it manually"; fi
+	tar czf $(ARCHIVE).tar.gz $(ARCHIVE)/
+	@rm -rf $(ARCHIVE)
+	@echo "Archive created: $(ARCHIVE).tar.gz"
+	@echo "Size: $$(du -h $(ARCHIVE).tar.gz | cut -f1)"
 
 -include $(DEPS)
