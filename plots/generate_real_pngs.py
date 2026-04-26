@@ -103,8 +103,6 @@ def main():
     ax2.grid(True, alpha=0.3, which="both")
     ax2.legend(fontsize=10)
 
-    fig.suptitle("Skalowanie jakości i czasu (dane z results_v3/unitime_v2_*.csv)",
-                 fontsize=14, y=1.02)
     fig.tight_layout()
     out = os.path.join(ROOT, "plots", "quality_scaling_real.png")
     fig.savefig(out, dpi=120, bbox_inches="tight")
