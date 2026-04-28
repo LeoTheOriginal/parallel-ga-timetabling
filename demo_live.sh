@@ -95,9 +95,9 @@ echo "  ETAP 3: Plan dla grupy FiIS-PIS-2"
 echo "  (Informatyka Stosowana, II stopien)"
 echo "=========================================="
 echo ""
-echo "+ awk '/^=== Timetable for FiIS-PIS-2/,/^Total events:/' timetable.txt"
+echo "+ python3 scripts/pretty_pis2.py"
 echo ""
-awk '/^=== Timetable for FiIS-PIS-2/{p=1} p{print} p && /^Total events:/{print ""; p=0}' timetable.txt
+python3 scripts/pretty_pis2.py
 echo ""
 read -rp "[ENTER] aby zakonczyc demo..."
 
