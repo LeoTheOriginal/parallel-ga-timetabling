@@ -45,92 +45,63 @@ read -rp "[ENTER] aby pokazac dane wejsciowe..."
 # ============== ETAP 1: PROBLEM ==============
 cls
 echo "=========================================="
-echo "  ETAP 1: Dane wejsciowe (UniTime AGH)"
+echo "  ETAP 1: Dane wejsciowe (UniTime AGH, pelen dataset)"
 echo "=========================================="
 echo ""
-echo "Dataset: data/simple_n200/  (podzbior 100 zdarzen z UniTime)"
+echo "Dataset: data/simple/  (pelne 633 zdarzen z UniTime AGH, sem. letni 2026)"
 echo ""
 for f in courses.csv groups.csv rooms.csv teachers.csv; do
-    n=$(wc -l < "data/simple_n200/$f")
+    n=$(wc -l < "data/simple/$f")
     printf "  %-15s %4d wierszy\n" "$f" "$((n - 1))"
 done
 echo ""
 echo "Cel: przypisac kazde zdarzenie do pary (slot, sala) tak,"
 echo "     aby wyzerowac twarde naruszenia i zminimalizowac miekkie."
 echo ""
-read -rp "[ENTER] aby uruchomic GA na 1 procesie (sekwencyjnie)..."
+echo "Przestrzen rozwiazan: (35*41)^633 = 1435^633 ~ 10^2003 mozliwosci."
+echo ""
+read -rp "[ENTER] aby uruchomic GA na 16 procesach klastra..."
 
-# ============== ETAP 2: 1 PROCES ==============
+# ============== ETAP 2: 16 PROCESOW NA PELNYM DATASECIE ==============
 cls
 echo "=========================================="
-echo "  ETAP 2: 1 proces MPI (sekwencyjnie)"
-echo "=========================================="
-echo ""
-echo "+ /opt/nfs/config/station204_name_list.sh 1 1 > nodes_seq"
-/opt/nfs/config/station204_name_list.sh 1 1 > nodes_seq
-echo "  -> uzywam wezla: $(cat nodes_seq | tr '\n' ' ')"
-echo ""
-echo "+ mpiexec -f nodes_seq -n 1 ./timetable_ga data/simple_n200/"
-echo ""
-
-OUT_SEQ=$(mktemp)
-mpiexec -f nodes_seq -n 1 ./timetable_ga data/simple_n200/ < /dev/null 2>&1 | tee "$OUT_SEQ" | tail -12
-T_SEQ=$(grep -E "^Wall-clock time:" "$OUT_SEQ" | tail -1 | awk '{print $3}')
-rm -f "$OUT_SEQ"
-
-echo ""
-echo "  >>> Czas algorytmu (Wall-clock GA): ${T_SEQ} s"
-echo "      (pomiar wewnetrzny, bez narzutu mpiexec setup)"
-echo ""
-read -rp "[ENTER] aby uruchomic to samo na 16 procesach klastra..."
-
-# ============== ETAP 3: 16 PROCESOW ==============
-cls
-echo "=========================================="
-echo "  ETAP 3: 16 procesow MPI (Island Model)"
+echo "  ETAP 2: 16 procesow MPI (Island Model)"
+echo "  na pelnym datasecie (633 zdarzen)"
 echo "=========================================="
 echo ""
 echo "+ /opt/nfs/config/station204_name_list.sh 1 16 > nodes_par"
 /opt/nfs/config/station204_name_list.sh 1 16 > nodes_par
 echo "  -> dostepne wezly: $(wc -l < nodes_par) z 16"
 echo ""
-echo "+ mpiexec -f nodes_par -n 16 ./timetable_ga data/simple_n200/"
+echo "+ mpiexec -f nodes_par -n 16 ./timetable_ga data/simple/"
 echo ""
 
 OUT_PAR=$(mktemp)
-mpiexec -f nodes_par -n 16 ./timetable_ga data/simple_n200/ < /dev/null 2>&1 | tee "$OUT_PAR" | tail -12
+mpiexec -f nodes_par -n 16 ./timetable_ga data/simple/ < /dev/null 2>&1 | tee "$OUT_PAR" | tail -12
 T_PAR=$(grep -E "^Wall-clock time:" "$OUT_PAR" | tail -1 | awk '{print $3}')
 rm -f "$OUT_PAR"
 
 echo ""
 echo "  >>> Czas algorytmu (Wall-clock GA): ${T_PAR} s"
-echo "      (pomiar wewnetrzny, bez narzutu mpiexec setup)"
 echo ""
-SPEEDUP=$(awk "BEGIN { printf \"%.2f\", $T_SEQ / $T_PAR }")
-echo "=========================================="
-echo "  POROWNANIE: T_seq=${T_SEQ}s  T_par=${T_PAR}s"
-echo "  SPEEDUP    = ${SPEEDUP}x"
-echo "=========================================="
+echo "  Sekwencyjnie ten sam dataset zajalby ~160s (S16~14.4x z tabeli)."
 echo ""
-read -rp "[ENTER] aby zobaczyc wygenerowany plan zajec..."
+read -rp "[ENTER] aby zobaczyc plan zajec dla NASZEJ grupy (PIS-2)..."
 
-# ============== ETAP 4: WYNIK ==============
+# ============== ETAP 3: PLAN DLA GRUPY PIS-2 ==============
 cls
 echo "=========================================="
-echo "  ETAP 4: Wygenerowany plan zajec"
+echo "  ETAP 3: Plan dla grupy FiIS-PIS-2"
+echo "  (Informatyka Stosowana, II stopien)"
 echo "=========================================="
 echo ""
-echo "+ head -8 schedule.csv"
+echo "+ awk '/^=== Timetable for FiIS-PIS-2/,/^Total events:/' timetable.txt"
 echo ""
-head -8 schedule.csv
-echo ""
-echo "+ head -25 timetable.txt"
-echo ""
-head -25 timetable.txt
+awk '/^=== Timetable for FiIS-PIS-2/{p=1} p{print} p && /^Total events:/{print ""; p=0}' timetable.txt
 echo ""
 read -rp "[ENTER] aby zakonczyc demo..."
 
-# ============== ETAP 5: CLEANUP ==============
+# ============== ETAP 4: ZAKONCZENIE ==============
 cls
 echo "=========================================="
 echo "  Demo zakonczone"
@@ -143,7 +114,7 @@ echo "  convergence_rank*.csv    - trajektorie fitness per rank ($(ls convergenc
 echo ""
 echo "  Wyniki na pelnym datasecie (633 zdarzen, 16 procesow):"
 echo "    T1=159.96s  T16=11.08s  -> S16 = 14.44x"
-echo "    Hard violations: 0  Soft violations: 2818"
+echo "    Hard violations: 0  Soft violations: ~2820"
 echo ""
 echo "Zeby wyczyscic artefakty: make clean"
 echo ""
