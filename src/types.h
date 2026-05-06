@@ -28,7 +28,7 @@ typedef struct {
     char name[MAX_NAME_LEN];
     int capacity;
     int is_lab;          /* 0 = lecture, 1 = lab, 2 = mixed (both) */
-    int building_id;     /* 0=D-10, 1=D-11, 2=D-7 (auto-assigned from name) */
+    int building_id;     /* small integer derived from the room-name prefix (drives building_continuity penalty) */
 } Room;
 
 typedef struct {

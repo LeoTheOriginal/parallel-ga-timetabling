@@ -1,10 +1,9 @@
 # Parallel GA -- University Timetabling
 # ======================================
 #
-# Before compiling, source the MPICH environment:
-#   source /opt/nfs/config/source_mpich500.sh
-#   source /opt/nfs/config/source_cuda121.sh
-#   export MPIR_CVAR_ENABLE_GPU=0
+# Build & run a single-host MPI process: just `make` then `make run`.
+# For a multi-node cluster: source your cluster's MPI environment first,
+# create a `nodes` hostfile, then `mpiexec -f nodes -n N ./timetable_ga DATA_DIR/`.
 
 CC       = mpicc
 CFLAGS   = -std=c99 -Wall -Wextra -Wpedantic -O2
@@ -17,7 +16,7 @@ OBJS     = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 DEPS     = $(OBJS:.o=.d)
 TARGET   = timetable_ga
 
-.PHONY: all run run-parallel benchmark plot report archive clean
+.PHONY: all run run-parallel benchmark plot demo archive clean
 
 all: $(TARGET)
 
@@ -30,65 +29,30 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 
-# Run locally with single process on small example dataset (100 events)
+# Run locally with a single MPI process on the small example dataset (100 events)
 run: $(TARGET)
 	mpiexec -n 1 ./$(TARGET) data/simple_n100/
 
-# Run with 4 MPI processes (island model)
+# Run with 4 MPI processes (island model, single host)
 run-parallel: $(TARGET)
-	mpiexec -n 4 ./$(TARGET) data/
-
-# Run with UniTime v2 dataset (filtered, multi-slot, ~1058 events)
-run-unitime: $(TARGET)
-	mpiexec -n 1 ./$(TARGET) data/unitime_v2_nogrupa/
-
-# Run UniTime v2 with 4 MPI processes
-run-unitime-parallel: $(TARGET)
-	mpiexec -n 4 ./$(TARGET) data/unitime_v2_nogrupa/
-
-# Run small subset (100 events, quick test)
-run-unitime-100: $(TARGET)
-	mpiexec -n 1 ./$(TARGET) data/unitime_v2_n100/
-
-# Convert UniTime data with various subset sizes
-convert-unitime:
-	python3 scripts/convert_unitime_v2.py data/unitime/events_raw.csv data/unitime_v2_nogrupa/ --no-grupa --all-rooms --stats
-	python3 scripts/convert_unitime_v2.py data/unitime/events_raw.csv data/unitime_v2/ --all-rooms --stats
-	@for N in 100 200 400 600; do \
-		python3 scripts/convert_unitime_v2.py data/unitime/events_raw.csv data/unitime_v2_n$${N}/ --no-grupa --all-rooms --subset $$N; \
-	done
-	@echo "All datasets generated."
+	mpiexec -n 4 ./$(TARGET) data/simple_n100/
 
 # Run benchmark suite (5 runs per configuration: n=1,2,4,8,16)
 benchmark: $(TARGET)
 	bash benchmark.sh
 
-# Generate performance charts
+# Regenerate the speedup / quality_scaling charts used by the report
 plot:
-	gnuplot plots/speedup_v2.gp
-	gnuplot plots/convergence_v2.gp
-	gnuplot plots/quality_scaling.gp
-	@echo "Charts generated in plots/"
+	python3 plots/generate_real_pngs.py
+	@echo "Charts regenerated in plots/ (speedup_real.png, quality_scaling_real.png)"
 
-# Start webapp (local demo)
+# Local demo: convert dataset, build SQLite, start the visualisation webapp
 demo:
 	bash demo.sh
-
-# Run on cluster
-demo-cluster:
-	bash demo.sh cluster
-
-# Generate simple dataset
-convert:
-	python3 scripts/convert_simple.py data/unitime/events_raw.csv data/simple/ --no-grupa --stats
 
 # Restore directory to initial state (build artifacts + generated outputs)
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET) timetable.txt schedule.csv convergence_rank*.csv nodes
-
-# Build PDF report (requires pdflatex)
-report:
-	$(MAKE) -C ../report
 
 # Create submission archive: 26-1-Piotrowski-Przezdzik.tar.gz
 ARCHIVE = 26-1-Piotrowski-Przezdzik

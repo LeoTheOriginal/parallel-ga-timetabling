@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-convert_simple.py -- Strict converter: ONLY events matching exact 1.5h AGH blocks.
+convert_simple.py -- Strict converter: ONLY events matching exact 1.5h block boundaries.
 
-Filters: known teacher, D-10/D-7/D-11, no exams/INNE/NST/SZD,
-         start and end times EXACTLY match AGH block boundaries.
+Filters: known teacher, configured building whitelist (VALID_BLD),
+         no exams / dropped course types, start and end times must
+         match the block grid below exactly.
 
 Usage:
     python3 scripts/convert_simple.py data/unitime/events_raw.csv data/simple/ --stats

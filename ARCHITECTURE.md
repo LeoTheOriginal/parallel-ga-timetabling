@@ -1,113 +1,103 @@
-# Architektura: Równoległy Algorytm Genetyczny dla Planowania Zajęć
+# Architecture: Parallel Genetic Algorithm for University Course Timetabling
 
-> **Projekt**: Systemy Równoległe i Rozproszone, AGH WFiIS
-> **Problem #26**: Planowanie zajęć uniwersyteckich
-> **Stan**: Prosty model 8-blokowy, 633 eventów, 0 hard violations, 2.7s (16 proc)
+> **Course:** Systemy Równoległe i Rozproszone — Project #26
+> **Result:** ≈100 events solved with 0 hard violations in ≈0.3 s on 16 MPI ranks (≈12× speedup over the sequential baseline).
 
 ---
 
 ## 1. Problem
 
-WFiIS AGH ma **633 zajęć tygodniowo** (bloki 1.5h) w **41 salach** prowadzonych
-przez **161 wykładowców** dla **191 grup**. GA rozmieszcza je w siatce
-**7 bloków × 5 dni × 41 sal** bez kolizji.
+A weekly schedule is a function $\sigma : \mathcal{E} \to \mathcal{T} \times \mathcal{R}$ assigning every academic event $e \in \mathcal{E}$ to a `(timeslot, room)` pair drawn from the grid
 
-**Model**: 1 event = 1 blok 1.5h (8:00-9:30, 9:45-11:15, ..., 18:30-20:00).
-Przerwy 15-minutowe między blokami są wbudowane w siatkę.
+$$
+|\mathcal{T}| \times |\mathcal{R}| \;=\; (\text{days} \times \text{blocks/day}) \times \text{rooms}
+$$
 
-## 2. Dane
+Each event represents a 1.5 h block (08:00–09:30, 09:45–11:15, …, 18:30–20:00).
 
-Źródło: UniTime AGH, eksport `events_raw.csv` (4587 wierszy, semestr letni 2026).
+## 2. Data pipeline
 
-**Filtrowanie** (`scripts/convert_simple.py --no-grupa`):
-- Tylko budynki D-10, D-7, D-11
-- Tylko eventy z przypisanym prowadzącym
-- Tylko eventy **dokładnie pasujące do bloków 1.5h AGH**
-- Bez: INNE, NST, SZD, egzaminów, konsultacji, kolokwiów
-- Deduplikacja: klucz (Nazwa, Typ, Tytuł, Dzień, Prowadzący) — bez Grupy
+A real-world UniTime export is filtered down to a clean CSV bundle by `scripts/convert_simple.py`:
 
-**Wynik**: 633 unique weekly events, 44% fill rate (633 / 1435 room-blocks).
+- only events with an assigned teacher,
+- only events that fit cleanly onto the 1.5 h grid,
+- exclude exam slots, consultations, and ad-hoc colloquia,
+- deduplicate on `(name, type, title, day, teacher)`.
 
-## 3. Architektura MPI
+**Note:** the input data is private (real personnel and group identifiers) and is not committed; see [`data/README.md`](data/README.md).
+
+## 3. MPI architecture
 
 ```
-Rank 0:                     Rank 1..N-1:
-  load CSV → ProblemData      (wait)
-  MPI_Bcast ─────────────→  receive data
-  run_ga (island model)       run_ga (island model)
-    ├── init population         ├── init population
-    ├── generational loop       ├── generational loop
-    │   ├── evaluate (hard+soft)│   ├── evaluate
-    │   ├── select + crossover  │   ├── select + crossover
-    │   ├── adaptive mutate     │   ├── adaptive mutate
-    │   ├── repair              │   ├── repair
-    │   ├── MPI_Allreduce ←───→ │   ├── MPI_Allreduce (terminate)
-    │   └── MPI_Sendrecv  ←───→ │   └── MPI_Sendrecv  (migrate)
-    └── local search            └── local search
-  MPI_Allreduce(MINLOC) ──→  global best
+Rank 0                       Rank 1..N-1
+  load CSV → ProblemData       (wait)
+  MPI_Bcast ─────────────→   receive data
+  run_ga (island model)        run_ga (island model)
+    ├── init population          ├── init population
+    ├── generational loop        ├── generational loop
+    │   ├── evaluate             │   ├── evaluate
+    │   ├── select + crossover   │   ├── select + crossover
+    │   ├── adaptive mutate      │   ├── adaptive mutate
+    │   ├── repair               │   ├── repair
+    │   ├── MPI_Allreduce ←───→  │   ├── MPI_Allreduce (terminate)
+    │   └── MPI_Sendrecv  ←───→  │   └── MPI_Sendrecv  (migrate)
+    └── local search             └── local search
+  MPI_Allreduce(MINLOC) ──→   global best
   write schedule.csv + timetable.txt
 ```
 
-## 4. Algorytm GA
+## 4. GA pipeline
 
-| Komponent | Opis |
-|-----------|------|
-| Populacja | 200 / N wysp |
-| Selekcja | Turniej K=3, dwupoziomowe porównanie |
-| Crossover | Uniform 50/50, 80% prawdopodobieństwo |
-| Mutacja | Adaptive: 5% (hard>0), 1% (hard=0) |
+| Operator | Choice |
+|---|---|
+| Population | 200 / N islands |
+| Selection | Tournament K=3, two-level (hard before soft) |
+| Crossover | Uniform 50/50, $p_c = 0.8$ |
+| Mutation | Adaptive: 5 % when $H>0$, 1 % when $H=0$ |
 | Repair | Greedy: 20 random probes + systematic scan, soft-aware tiebreaker |
-| Migracja | Ring topology, co 50 generacji, MPI_Sendrecv |
-| Terminacja | MPI_MAX (OR): stagnation≥200 lub fitness==0 |
-| Local search | Hill climbing 5000 iter po GA, 15 probes/iter |
+| Migration | Ring topology, every 50 generations, `MPI_Sendrecv` |
+| Termination | `MPI_Allreduce(MAX)`: stagnation ≥ 200 OR fitness == 0 |
+| Local search | Hill climbing, 5000 iters, 15 probes/iter |
 
 ### Hard constraints
-- Kolizja sali (2+ events w jednym room-block)
-- Kolizja prowadzącego (ten sam teacher w 2 miejscach)
-- Kolizja grupy (ta sama grupa w 2 miejscach)
-- Day overflow (event poza zakresem dnia)
+- Room collision (≥ 2 events sharing a room-block)
+- Teacher collision (same teacher in two places)
+- Group collision (same group in two places)
+- Day overflow (event placed past the day's last slot)
 
 ### Soft constraints
-- Okienka (gaps×2 penalty)
-- Compact days (preferuj mniej dni z zajęciami)
-- Późne zajęcia (bloki 6-7, po 18:30)
-- Teacher compactness (mniej dni prowadzenia)
-- Room capacity (students > room capacity)
-- Building continuity (minimalizuj zmiany budynku w ciągu dnia)
+- Gaps between classes (×2 penalty)
+- Day compactness (prefer fewer days with classes)
+- Late slots (blocks 6–7, after 18:30)
+- Teacher day compactness
+- Room capacity vs. group size
+- Building continuity (minimise inter-block building changes)
 
-## 5. Wyniki
+## 5. Webapp
 
-| MPI | Czas | Hard | Soft |
-|-----|------|------|------|
-| 1 | ~20s | 0 | ~5000 |
-| 16 | **2.7s** | **0** | ~5000 |
+`webapp.html` is a dark-theme SPA served by `scripts/api_prototype.py`. Tabs:
+**Sale** · **Kierunki** · **Studenci** · **Prowadzący** · **Statystyki**.
 
-Benchmarki z różnymi rozmiarami: results_v3/*.csv
+Start: `bash demo.sh` → http://localhost:8080/.
 
-## 6. Webapp
-
-`webapp.html` — dark-theme SPA serwowana przez `scripts/api_prototype.py`.
-
-Tabs: **Sale** | **Kierunki** | **Studenci** | **Prowadzący** | **Statystyki**
-
-Start: `bash demo.sh` → http://localhost:8080/
-
-## 7. Struktura plików
+## 6. File map
 
 ```
-project/
-├── src/                  (10 plików C — GA engine)
-├── scripts/
-│   ├── api_prototype.py  (API + webapp server)
-│   ├── convert_simple.py (UniTime → GA input, strict 1.5h blocks)
-│   └── create_db.py      (SQLite builder)
-├── data/
-│   ├── simple/           (aktywny dataset: 633 events)
-│   └── unitime/          (surowe dane AGH)
-├── results_v3/           (benchmarki: CSV)
-├── plots/                (wykresy: speedup, convergence, quality)
-├── webapp.html           (dark SPA)
-├── timetable.db          (SQLite)
-├── demo.sh               (one-click demo)
-└── Makefile
+src/                   GA engine in C99 (10 files)
+scripts/
+├── api_prototype.py   REST API + webapp server
+├── convert_simple.py  UniTime → GA-input CSV (strict 1.5 h block filter)
+├── create_db.py       SQLite cache builder
+└── pretty_pis2.py     Per-group plan renderer (terminal)
+plots/
+├── generate_real_pngs.py     matplotlib chart generator
+├── speedup_real.png          (used by the report)
+├── quality_scaling_real.png  (used by the report)
+└── sizeof_problemdata.c      verifies Bcast payload size matches types.h
+data/                  input CSVs (not committed — see data/README.md)
+results_v3/            benchmark output (per-run + summary CSVs)
+webapp.html            dark-theme SPA
+benchmark.sh           5-run-per-config benchmark with statistics
+demo.sh                local one-click demo
+Makefile               build, run, benchmark, plot, archive
 ```

@@ -63,7 +63,7 @@ def main():
                 label=f"{label} zdarzeń (S₁₆={speedup[-1]:.2f}×)")
     ax.set_xlabel("Liczba procesów MPI", fontsize=12)
     ax.set_ylabel("Przyspieszenie S(p) = T(1)/T(p)", fontsize=12)
-    ax.set_title("Przyspieszenie vs liczba procesów\n(Island Model GA, klaster AGH stud204-*)",
+    ax.set_title("Przyspieszenie vs liczba procesów\n(Island Model GA, klaster MPI 16 węzłów)",
                  fontsize=13)
     ax.set_xticks(procs)
     ax.set_xlim(0.5, 17.5)
