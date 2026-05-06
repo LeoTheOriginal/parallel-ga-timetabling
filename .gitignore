@@ -27,6 +27,9 @@ nodes
 *.gz
 *.pdf
 
+# Plain-text README is a submission-archive artefact only — README.md is the canonical one
+README.txt
+
 # OS/editor
 .DS_Store
 Thumbs.db
