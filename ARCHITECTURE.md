@@ -28,22 +28,72 @@ A real-world UniTime export is filtered down to a clean CSV bundle by `scripts/c
 
 ## 3. MPI architecture
 
+The runtime view — what every rank does, and the four MPI primitives that
+glue them together:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant R0 as Rank 0
+    participant Rk as Rank k
+    participant RN as Rank N-1
+
+    R0->>R0: parse CSV → ProblemData
+    R0->>Rk: MPI_Bcast(ProblemData)
+    R0->>RN: MPI_Bcast(ProblemData)
+
+    par Independent evolution per island
+        R0->>R0: select · cross · mutate · repair
+    and
+        Rk->>Rk: select · cross · mutate · repair
+    and
+        RN->>RN: select · cross · mutate · repair
+    end
+
+    Note over R0,RN: every 50 generations — ring migration
+    R0->>Rk: MPI_Sendrecv(best chromosome)
+    Rk->>RN: MPI_Sendrecv(best chromosome)
+    RN->>R0: MPI_Sendrecv(best chromosome)
+
+    Note over R0,RN: every generation — collective sync
+    R0->>Rk: MPI_Allreduce(MINLOC) — global best
+    Rk->>RN: MPI_Allreduce(MAX) — terminate?
+
+    R0->>R0: hill-climb global best
+    R0->>R0: write schedule.csv + timetable.txt
 ```
-Rank 0                       Rank 1..N-1
-  load CSV → ProblemData       (wait)
-  MPI_Bcast ─────────────→   receive data
-  run_ga (island model)        run_ga (island model)
-    ├── init population          ├── init population
-    ├── generational loop        ├── generational loop
-    │   ├── evaluate             │   ├── evaluate
-    │   ├── select + crossover   │   ├── select + crossover
-    │   ├── adaptive mutate      │   ├── adaptive mutate
-    │   ├── repair               │   ├── repair
-    │   ├── MPI_Allreduce ←───→  │   ├── MPI_Allreduce (terminate)
-    │   └── MPI_Sendrecv  ←───→  │   └── MPI_Sendrecv  (migrate)
-    └── local search             └── local search
-  MPI_Allreduce(MINLOC) ──→   global best
-  write schedule.csv + timetable.txt
+
+Migration topology — strict ring, deadlock-free thanks to `MPI_Sendrecv`:
+
+```mermaid
+flowchart LR
+    R0((Rank 0)) -->|"Sendrecv"| R1((Rank 1))
+    R1 -->|"Sendrecv"| R2((Rank 2))
+    R2 -->|"Sendrecv"| R3((Rank 3))
+    R3 -->|"Sendrecv"| Rd((…))
+    Rd -->|"Sendrecv"| RN((Rank N-1))
+    RN -->|"Sendrecv"| R0
+```
+
+Inside a single generation on one rank — the loop body that runs N times in
+parallel between two synchronisation points:
+
+```mermaid
+flowchart TB
+    Start([generation g]) --> Eval[evaluate fitness<br/>H · w_h + S · w_s]
+    Eval --> Sel[tournament selection<br/>K = 3, two-level]
+    Sel --> Cross[uniform crossover<br/>p_c = 0.8]
+    Cross --> Mut{H &gt; 0?}
+    Mut -->|yes| MutH[mutate p = 5%]
+    Mut -->|no| MutL[mutate p = 1%]
+    MutH --> Rep[greedy repair<br/>20 probes + scan]
+    MutL --> Rep
+    Rep --> Mig{g mod 50 == 0?}
+    Mig -->|yes| Send[MPI_Sendrecv → ring]
+    Mig -->|no| GB
+    Send --> GB[MPI_Allreduce MINLOC<br/>global best]
+    GB --> Stop[MPI_Allreduce MAX<br/>terminate flag]
+    Stop --> End([generation g+1])
 ```
 
 ## 4. GA pipeline
