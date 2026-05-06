@@ -30,9 +30,9 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 
-# Run locally with single process (backward-compatible, no cluster needed)
+# Run locally with single process on small example dataset (100 events)
 run: $(TARGET)
-	mpiexec -n 1 ./$(TARGET) data/
+	mpiexec -n 1 ./$(TARGET) data/simple_n100/
 
 # Run with 4 MPI processes (island model)
 run-parallel: $(TARGET)
@@ -90,16 +90,24 @@ clean:
 report:
 	$(MAKE) -C ../report
 
-# Create submission archive: 26-2-piotrowski-przezdzik.tar.gz
-ARCHIVE = 26-2-piotrowski-przezdzik
+# Create submission archive: 26-1-Piotrowski-Przezdzik.tar.gz
+ARCHIVE = 26-1-Piotrowski-Przezdzik
 archive: clean
 	@mkdir -p $(ARCHIVE)
 	@cp -r src/ $(ARCHIVE)/src/
-	@cp -r data/simple/ $(ARCHIVE)/data/
-	@cp -r results_v3/ $(ARCHIVE)/results/
+	@mkdir -p $(ARCHIVE)/data
+	@cp -r data/simple_n100/. $(ARCHIVE)/data/
+	@mkdir -p $(ARCHIVE)/results
+	@cp results_v3/schedule_simple_n100_p1.csv $(ARCHIVE)/results/schedule_example_n1.csv
+	@cp results_v3/schedule_simple_n100_p16.csv $(ARCHIVE)/results/schedule_example_n16.csv
+	@cp results_v3/unitime_v2_n100.csv $(ARCHIVE)/results/benchmark_summary_n100.csv
 	@cp Makefile $(ARCHIVE)/
 	@cp README.txt $(ARCHIVE)/
-	@if [ -f raport.pdf ]; then cp raport.pdf $(ARCHIVE)/; else echo "WARNING: raport.pdf not found — copy it manually"; fi
+	@if [ -f parallel_ga_timetabling_report.pdf ]; then \
+		cp parallel_ga_timetabling_report.pdf $(ARCHIVE)/raport.pdf; \
+	elif [ -f ../parallel-ga-timetabling-report/parallel_ga_timetabling_report.pdf ]; then \
+		cp ../parallel-ga-timetabling-report/parallel_ga_timetabling_report.pdf $(ARCHIVE)/raport.pdf; \
+	else echo "WARNING: PDF raportu nie znaleziony"; fi
 	tar czf $(ARCHIVE).tar.gz $(ARCHIVE)/
 	@rm -rf $(ARCHIVE)
 	@echo "Archive created: $(ARCHIVE).tar.gz"

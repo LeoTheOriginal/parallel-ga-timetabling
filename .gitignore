@@ -23,6 +23,10 @@ results_v3/
 # Cluster files
 nodes
 
+# Submission artifacts (PDF lives in the report repo, not here)
+*.gz
+*.pdf
+
 # OS/editor
 .DS_Store
 Thumbs.db
